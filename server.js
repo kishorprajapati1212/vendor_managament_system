@@ -1,9 +1,11 @@
 const express = require('express');
+const cors = require('cors'); // 🔥 FIXED: Imported CORS package
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const vendorRoutes = require('./routes/vendorRoutes');
 const rfqRoutes = require('./routes/rfqRoutes');
+const quotationRoutes = require('./routes/quotationRoutes');
 
 dotenv.config();
 
@@ -12,15 +14,18 @@ const app = express();
 // Body parsers
 app.use(express.json());
 
-// Auto-initialize DB Table for the hackathon
-// userRepository.initTable()
-//   .then(() => console.log('📁 Database tables verified/created.'))
-//   .catch(err => console.error('❌ Failed to initialize tables:', err));
+// 🔥 FIXED: Enable CORS for all incoming cross-origin frontend channels
+app.use(cors({
+  origin: '*', // Allows connections from any frontend origin port (Perfect for quick hackathon deployment)
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Routes
 app.use('/v1/auth', authRoutes);
 app.use('/v1/vendors', vendorRoutes);
 app.use('/v1/rfqs', rfqRoutes);
+app.use('/v1', quotationRoutes);
 
 // Root route check
 app.get('/', (req, res) => {
