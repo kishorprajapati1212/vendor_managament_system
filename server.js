@@ -6,6 +6,7 @@ const errorHandler = require('./middleware/errorHandler');
 const vendorRoutes = require('./routes/vendorRoutes');
 const rfqRoutes = require('./routes/rfqRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
+const comparisonRoutes = require('./routes/comparisonRoutes');
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/v1/auth', authRoutes);
 app.use('/v1/vendors', vendorRoutes);
 app.use('/v1/rfqs', rfqRoutes);
 app.use('/v1', quotationRoutes);
+app.use('/v1', comparisonRoutes);
 
 // Root route check
 app.get('/', (req, res) => {
