@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   FaFileInvoiceDollar,
   FaDownload,
@@ -14,6 +14,7 @@ import {
   FaCheck,
   FaBolt,
 } from 'react-icons/fa';
+import { getInvoices, getInvoiceById, downloadInvoicePdf, sendInvoiceEmail, markInvoiceAsPaid } from '../services/invoiceService';
 
 /* ─── Data ─────────────────────────────────── */
 const PO = {
@@ -51,24 +52,161 @@ const fmt = (n) =>
 
 /* ─── Component ─────────────────────────────── */
 export default function InvoiceManagement() {
+  const [invoices, setInvoices] = useState([]);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   const [paid, setPaid] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const subtotal  = ITEMS.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-  const cgst      = (subtotal * GST_RATE) / 200;
-  const sgst      = (subtotal * GST_RATE) / 200;
-  const grandTotal = subtotal + cgst + sgst;
-
-  const handleEmail = () => {
-    setEmailSent(true);
-    setTimeout(() => setEmailSent(false), 3000);
+  const loadInvoices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getInvoices();
+      setInvoices(res.data);
+      if (res.data.length > 0) {
+        const details = await getInvoiceById(res.data[0].id);
+        setSelectedInvoice(details.data);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch invoices: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /* ── Top action buttons ── */
-  const ActionBtn = ({ icon: Icon, label, onClick, className = '' }) => (
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  const handleInvoiceSelect = async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const details = await getInvoiceById(id);
+      setSelectedInvoice(details.data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load invoice details: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activePO = selectedInvoice ? {
+    number: selectedInvoice.invoice_number,
+    poDate: selectedInvoice.created_at ? new Date(selectedInvoice.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '22 May 2025',
+    invoiceDate: selectedInvoice.invoice_date ? new Date(selectedInvoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '22 May 2025',
+    dueDate: selectedInvoice.due_date ? new Date(selectedInvoice.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '21 June 2025',
+    rfq: 'Live Procurement Project'
+  } : PO;
+
+  const activeBillTo = selectedInvoice ? {
+    name: 'Your Organization Name',
+    address: selectedInvoice.billing_address || '123 Business Park',
+    city: 'Ahmedabad, Gujarat – 380001',
+    gstin: '24ABCDE1234F1Z5',
+  } : BILL_TO;
+
+  const activeVendor = selectedInvoice ? {
+    name: selectedInvoice.vendor_name || 'Infra Supplies Pvt Ltd',
+    address: 'Industrial Estate, Phase II',
+    city: 'Surat, Gujarat – 395003',
+    gstin: '24ABCDE5678G1Z8',
+  } : VENDOR;
+
+  const activeItems = selectedInvoice && selectedInvoice.items && selectedInvoice.items.length > 0
+    ? selectedInvoice.items.map(item => ({
+        id: item.id,
+        name: item.item_name,
+        desc: item.description || '',
+        qty: item.quantity,
+        unit: item.unit,
+        unitPrice: Number(item.unit_price)
+      }))
+    : ITEMS;
+
+  const activePaid = selectedInvoice ? (selectedInvoice.status === 'paid') : paid;
+
+  const subtotal = activeItems.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  const cgst     = selectedInvoice ? Number(selectedInvoice.tax_amount) / 2 : (subtotal * GST_RATE) / 200;
+  const sgst     = selectedInvoice ? Number(selectedInvoice.tax_amount) / 2 : (subtotal * GST_RATE) / 200;
+  const grandTotal = selectedInvoice ? Number(selectedInvoice.total_amount) : (subtotal + cgst + sgst);
+
+  const handleEmail = async () => {
+    if (selectedInvoice) {
+      setSubmitting(true);
+      try {
+        await sendInvoiceEmail(selectedInvoice.id, {
+          to: selectedInvoice.vendor_email || 'vendor@company.com',
+          subject: `Invoice ${selectedInvoice.invoice_number} from VendorBridge`,
+          body: `Please find the attached invoice ${selectedInvoice.invoice_number} for ₹${grandTotal.toFixed(2)}.`
+        });
+        setEmailSent(true);
+        setTimeout(() => setEmailSent(false), 3000);
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || err.message || 'Failed to email invoice');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 3000);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (selectedInvoice) {
+      setSubmitting(true);
+      try {
+        const res = await downloadInvoicePdf(selectedInvoice.id);
+        const blob = new Blob([res.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Invoice-${selectedInvoice.invoice_number}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to download invoice PDF');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      alert('Mock PDF download is only available for live invoices');
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (selectedInvoice) {
+      setSubmitting(true);
+      try {
+        await markInvoiceAsPaid(selectedInvoice.id, { paid_amount: grandTotal });
+        const details = await getInvoiceById(selectedInvoice.id);
+        setSelectedInvoice(details.data);
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || err.message || 'Failed to mark invoice as paid');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      setPaid(true);
+    }
+  };
+
+  const ActionBtn = ({ icon: Icon, label, onClick, className = '', disabled = false }) => (
     <button
       onClick={onClick}
-      className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition duration-150 active:scale-[0.98] ${className}`}
+      disabled={disabled}
+      className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition duration-150 active:scale-[0.98] disabled:opacity-50 ${className}`}
     >
       <Icon size={13} />
       <span>{label}</span>
@@ -77,6 +215,36 @@ export default function InvoiceManagement() {
 
   return (
     <div className="space-y-6 pb-12">
+
+      {/* Connection and fallbacks alerts */}
+      {error && (
+        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+      
+      {!selectedInvoice ? (
+        <div className="bg-blue-600/10 border border-blue-500/20 text-blue-400 text-xs px-4 py-3 rounded-xl">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span>Connected to Live API (No live invoices found on Render). Displaying mock invoice preview.</span>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 text-xs px-4 py-3 rounded-xl">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Connected to Live API: Displaying live invoice record.</span>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-4 text-slate-400 text-xs font-semibold flex items-center justify-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-500" />
+          <span>Loading invoice data...</span>
+        </div>
+      )}
 
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -87,13 +255,30 @@ export default function InvoiceManagement() {
             </div>
             <h2 className="text-3xl font-bold text-white tracking-tight">Purchase Order &amp; Invoice</h2>
           </div>
-          <div className="ml-12 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-            <span className="text-slate-400 text-sm font-mono font-semibold text-emerald-400/90">{PO.number}</span>
+          <div className="ml-12 flex flex-wrap items-center gap-x-3 gap-y-2 mt-1">
+            <span className="text-slate-400 text-sm font-mono font-semibold text-emerald-400/90">{activePO.number}</span>
             <span className="text-slate-500">·</span>
             <span className="text-slate-400 text-sm flex items-center space-x-1">
               <FaBolt size={10} className="text-amber-400" />
               <span>Auto Generated After Approval</span>
             </span>
+
+            {invoices.length > 0 && (
+              <>
+                <span className="text-slate-500">·</span>
+                <select
+                  value={selectedInvoice?.id || ''}
+                  onChange={(e) => handleInvoiceSelect(e.target.value)}
+                  className="bg-[#1e293b]/80 border border-white/10 text-xs text-white rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500 font-semibold"
+                >
+                  {invoices.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.invoice_number} ({inv.vendor_name})
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
         </div>
 
@@ -101,7 +286,9 @@ export default function InvoiceManagement() {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <ActionBtn
             icon={FaDownload}
-            label="Download PDF"
+            label={submitting ? 'Downloading...' : 'Download PDF'}
+            onClick={handleDownload}
+            disabled={submitting}
             className="bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25 hover:border-blue-500/50"
           />
           <ActionBtn
@@ -112,8 +299,9 @@ export default function InvoiceManagement() {
           />
           <ActionBtn
             icon={FaEnvelope}
-            label={emailSent ? 'Sent!' : 'Email Invoice'}
+            label={emailSent ? 'Sent!' : submitting ? 'Sending...' : 'Email Invoice'}
             onClick={handleEmail}
+            disabled={submitting}
             className={emailSent
               ? 'bg-emerald-600/20 border-emerald-500/30 text-emerald-400'
               : 'bg-[#1e293b]/60 border-white/15 text-slate-300 hover:text-white hover:border-white/30'}
@@ -131,15 +319,15 @@ export default function InvoiceManagement() {
               <FaStamp size={18} className="text-blue-400" />
               <span className="text-lg font-bold text-white tracking-wide">TAX INVOICE</span>
             </div>
-            <span className="text-xs text-slate-400 font-mono">{PO.number}</span>
+            <span className="text-xs text-slate-400 font-mono">{activePO.number}</span>
           </div>
           <div className={`flex items-center space-x-2 px-4 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider ${
-            paid
+            activePaid
               ? 'bg-emerald-500/20 border-emerald-500/35 text-emerald-300'
               : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
           }`}>
-            {paid ? <FaCheckCircle size={12} /> : <FaClock size={12} />}
-            <span>{paid ? 'Paid' : 'Pending Payment'}</span>
+            {activePaid ? <FaCheckCircle size={12} /> : <FaClock size={12} />}
+            <span>{activePaid ? 'Paid' : 'Pending Payment'}</span>
           </div>
         </div>
 
@@ -154,12 +342,12 @@ export default function InvoiceManagement() {
                 <FaBuilding size={10} />
                 <span>Bill To</span>
               </span>
-              <p className="text-sm font-bold text-white mb-1">{BILL_TO.name}</p>
-              <p className="text-xs text-slate-400 leading-relaxed">{BILL_TO.address}</p>
-              <p className="text-xs text-slate-400">{BILL_TO.city}</p>
+              <p className="text-sm font-bold text-white mb-1">{activeBillTo.name}</p>
+              <p className="text-xs text-slate-400 leading-relaxed">{activeBillTo.address}</p>
+              <p className="text-xs text-slate-400">{activeBillTo.city}</p>
               <div className="mt-3 flex items-center space-x-1.5">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider">GSTIN:</span>
-                <span className="text-xs font-mono font-semibold text-slate-300">{BILL_TO.gstin}</span>
+                <span className="text-xs font-mono font-semibold text-slate-300">{activeBillTo.gstin}</span>
               </div>
             </div>
 
@@ -169,12 +357,12 @@ export default function InvoiceManagement() {
                 <FaBuilding size={10} />
                 <span>Vendor / Ship From</span>
               </span>
-              <p className="text-sm font-bold text-white mb-1">{VENDOR.name}</p>
-              <p className="text-xs text-slate-400 leading-relaxed">{VENDOR.address}</p>
-              <p className="text-xs text-slate-400">{VENDOR.city}</p>
+              <p className="text-sm font-bold text-white mb-1">{activeVendor.name}</p>
+              <p className="text-xs text-slate-400 leading-relaxed">{activeVendor.address}</p>
+              <p className="text-xs text-slate-400">{activeVendor.city}</p>
               <div className="mt-3 flex items-center space-x-1.5">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider">GSTIN:</span>
-                <span className="text-xs font-mono font-semibold text-slate-300">{VENDOR.gstin}</span>
+                <span className="text-xs font-mono font-semibold text-slate-300">{activeVendor.gstin}</span>
               </div>
             </div>
 
@@ -186,10 +374,10 @@ export default function InvoiceManagement() {
               </span>
               <div className="space-y-2.5">
                 {[
-                  { label: 'PO Number',     value: PO.number,      mono: true  },
-                  { label: 'PO Date',       value: PO.poDate,      mono: false },
-                  { label: 'Invoice Date',  value: PO.invoiceDate, mono: false },
-                  { label: 'Due Date',      value: PO.dueDate,     mono: false, highlight: true },
+                  { label: 'PO Number',     value: activePO.number,      mono: true  },
+                  { label: 'PO Date',       value: activePO.poDate,      mono: false },
+                  { label: 'Invoice Date',  value: activePO.invoiceDate, mono: false },
+                  { label: 'Due Date',      value: activePO.dueDate,     mono: false, highlight: true },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider">{row.label}</span>
@@ -224,7 +412,7 @@ export default function InvoiceManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-sm">
-                  {ITEMS.map((item, idx) => (
+                  {activeItems.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-white/[0.02] transition duration-100">
                       <td className="px-5 py-4 text-slate-500 text-xs">{String(idx + 1).padStart(2, '0')}</td>
                       <td className="px-5 py-4">
@@ -305,38 +493,39 @@ export default function InvoiceManagement() {
 
           {/* ── Payment Status & Action ── */}
           <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-xl border transition-all duration-500 ${
-            paid
+            activePaid
               ? 'bg-emerald-500/8 border-emerald-500/25'
               : 'bg-amber-500/8 border-amber-500/20'
           }`}>
             <div className="flex items-center space-x-3">
               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
-                paid
+                activePaid
                   ? 'bg-emerald-500/20 border-emerald-500/30'
                   : 'bg-amber-500/15 border-amber-500/25'
               }`}>
-                {paid
+                {activePaid
                   ? <FaCheckCircle size={16} className="text-emerald-400" />
                   : <FaClock size={16} className="text-amber-400" />
                 }
               </div>
               <div>
-                <p className={`text-sm font-bold ${paid ? 'text-emerald-300' : 'text-amber-300'}`}>
-                  {paid ? 'Payment Received' : 'Pending Payment'}
+                <p className={`text-sm font-bold ${activePaid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {activePaid ? 'Payment Received' : 'Pending Payment'}
                 </p>
                 <p className="text-xs text-slate-400">
-                  {paid
+                  {activePaid
                     ? `Grand Total ₹${fmt(grandTotal)} marked as paid`
-                    : `Due by ${PO.dueDate} · Amount ₹${fmt(grandTotal)}`
+                    : `Due by ${activePO.dueDate} · Amount ₹${fmt(grandTotal)}`
                   }
                 </p>
               </div>
             </div>
 
-            {!paid ? (
+            {!activePaid ? (
               <button
-                onClick={() => setPaid(true)}
-                className="flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-lg hover:shadow-emerald-500/30 transition duration-150 active:scale-[0.98] whitespace-nowrap"
+                onClick={handleMarkAsPaid}
+                disabled={submitting}
+                className="flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-lg hover:shadow-emerald-500/30 transition duration-150 active:scale-[0.98] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FaStamp size={13} />
                 <span>Mark As Paid</span>
@@ -347,12 +536,14 @@ export default function InvoiceManagement() {
                   <FaCheckCircle size={11} />
                   <span>Paid ✓</span>
                 </span>
-                <button
-                  onClick={() => setPaid(false)}
-                  className="text-[10px] text-slate-500 hover:text-slate-300 transition duration-150 underline underline-offset-2 px-2"
-                >
-                  Undo
-                </button>
+                {!selectedInvoice && (
+                  <button
+                    onClick={() => setPaid(false)}
+                    className="text-[10px] text-slate-500 hover:text-slate-300 transition duration-150 underline underline-offset-2 px-2"
+                  >
+                    Undo
+                  </button>
+                )}
               </div>
             )}
           </div>

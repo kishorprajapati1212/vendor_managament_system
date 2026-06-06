@@ -23,7 +23,7 @@ export default function Register() {
     setMessage({ type: '', text: '' });
     try {
       const payload = {
-        name: `${form.firstName} ${form.lastName}`.trim(),
+        full_name: `${form.firstName} ${form.lastName}`.trim(),
         email: form.email,
         password: form.password,
         role: form.role,

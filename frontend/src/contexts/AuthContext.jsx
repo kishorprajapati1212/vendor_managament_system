@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const res = await getMeApi();
-          setUser(res.data);
+          setUser(res.data.data);
         } catch (error) {
           localStorage.removeItem('token');
         }
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const res = await loginApi(credentials);
-    const { token, user: userData } = res.data;
+    const { token, user: userData } = res.data.data;
     localStorage.setItem('token', token);
     setUser(userData);
   };
