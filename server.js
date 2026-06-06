@@ -7,6 +7,8 @@ const vendorRoutes = require('./routes/vendorRoutes');
 const rfqRoutes = require('./routes/rfqRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
 const comparisonRoutes = require('./routes/comparisonRoutes');
+const approvalRoutes = require('./routes/approvalRoutes');
+const poRoutes = require('./routes/poRoutes');
 
 dotenv.config();
 
@@ -28,6 +30,8 @@ app.use('/v1/vendors', vendorRoutes);
 app.use('/v1/rfqs', rfqRoutes);
 app.use('/v1', quotationRoutes);
 app.use('/v1', comparisonRoutes);
+app.use('/v1', approvalRoutes);
+app.use('/v1', poRoutes);
 
 // Root route check
 app.get('/', (req, res) => {

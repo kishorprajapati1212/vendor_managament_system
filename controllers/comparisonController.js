@@ -1,5 +1,7 @@
 const comparisonRepository = require('../repositories/comparisonRepository');
 const asyncHandler = require('../utils/asyncHandler');
+const pool = require('../config/db');
+
 
 // Helper to validate UUID string formats cleanly on controllers
 const validateUuidString = (id) => {
@@ -43,6 +45,7 @@ const acceptQuotation = asyncHandler(async (req, res) => {
   const approverId = managerResult.rows[0]?.id || req.user.id;
 
   await comparisonRepository.acceptQuotationAndInitWorkflow(id, approverId);
+  console.log(approverId)
 
   res.status(200).json({
     success: true,
