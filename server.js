@@ -18,7 +18,7 @@ app.use(express.json());
 //   .catch(err => console.error('❌ Failed to initialize tables:', err));
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/v1/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 // Root route check
