@@ -10,7 +10,10 @@ const comparisonRoutes = require('./routes/comparisonRoutes');
 const approvalRoutes = require('./routes/approvalRoutes');
 const poRoutes = require('./routes/poRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
-
+const notificationRoutes = require('./routes/notificationRoutes');
+const auditRoutes = require('./routes/auditRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 dotenv.config();
 
@@ -35,6 +38,10 @@ app.use('/v1', comparisonRoutes);
 app.use('/v1', approvalRoutes);
 app.use('/v1', poRoutes);
 app.use('/v1', invoiceRoutes);
+app.use('/v1', notificationRoutes); 
+app.use('/v1', auditRoutes);   
+app.use('/v1', reportRoutes);  
+app.use('/v1', dashboardRoutes);
 
 // Root route check
 app.get('/', (req, res) => {
