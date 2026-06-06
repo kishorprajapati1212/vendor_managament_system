@@ -1,17 +1,26 @@
 import api from './api';
+
 export const getRFQs = async () => {
-  try { return await api.get('/api/rfqs'); }
-  catch (e) { return { data: [{ id: "RFQ-001 (Mock)", item: "Laptops", status: "Open", deadline: "2026-10-10" }] }; }
+  const res = await api.get('/v1/rfqs');
+  return { data: res.data && res.data.data && res.data.data.rfqs ? res.data.data.rfqs : [] };
 };
+
 export const createRFQ = async (rfq) => {
-  try { return await api.post('/api/rfqs', rfq); }
-  catch (e) { return { data: { id: "RFQ-" + Date.now(), ...rfq } }; }
+  const res = await api.post('/v1/rfqs', rfq);
+  return { data: res.data && res.data.data ? res.data.data : res.data };
 };
+
 export const getRFQById = async (id) => {
-  try { return await api.get(`/api/rfqs/${id}`); }
-  catch (e) { return { data: { id, item: "Mock Item", status: "Open" } }; }
+  const res = await api.get(`/v1/rfqs/${id}`);
+  return { data: res.data && res.data.data ? res.data.data : res.data };
 };
+
 export const updateRFQ = async (id, rfq) => {
-  try { return await api.put(`/api/rfqs/${id}`, rfq); }
-  catch (e) { return { data: { id, ...rfq } }; }
+  const res = await api.put(`/v1/rfqs/${id}`, rfq);
+  return { data: res.data && res.data.data ? res.data.data : res.data };
+};
+
+export const publishRFQ = async (id) => {
+  const res = await api.patch(`/v1/rfqs/${id}/publish`);
+  return { data: res.data && res.data.data ? res.data.data : res.data };
 };

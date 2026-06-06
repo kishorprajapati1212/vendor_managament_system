@@ -1,4 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useVendor } from '../contexts/VendorContext';
+import { createRFQ, publishRFQ } from '../services/rfqService';
 import {
   FaFileInvoice,
   FaPlus,
@@ -102,28 +104,23 @@ export default function RFQManagement() {
   const [showLineItemForm, setShowLineItemForm] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', quantity: '', unit: 'NOS' });
 
-  /* Vendors */
-  const [assignedVendors, setAssignedVendors] = useState([
-    { id: 1, name: 'Infra Supplies Pvt Ltd' },
-    { id: 2, name: 'Techcore LTD' },
-  ]);
+  /* Vendors from context */
+  const { vendors, fetchVendors } = useVendor();
+  const [assignedVendors, setAssignedVendors] = useState([]);
   const [showVendorSearch, setShowVendorSearch] = useState(false);
   const [vendorSearch, setVendorSearch] = useState('');
 
-  const allVendors = [
-    'Infra Supplies Pvt Ltd',
-    'Techcore LTD',
-    'ABC Supplies Pvt Ltd',
-    'FastLog Transport',
-    'Prime Tech Solutions',
-    'GlobalEdge Corp',
-    'Nexus Materials Ltd',
-  ];
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
-  const filteredVendors = allVendors.filter(
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+
+  const filteredVendors = vendors.filter(
     (v) =>
-      v.toLowerCase().includes(vendorSearch.toLowerCase()) &&
-      !assignedVendors.some((av) => av.name === v)
+      v.name.toLowerCase().includes(vendorSearch.toLowerCase()) &&
+      !assignedVendors.some((av) => av.id === v.id)
   );
 
   /* ── Handlers ── */
@@ -136,8 +133,8 @@ export default function RFQManagement() {
 
   const removeLineItem = (id) => setLineItems(lineItems.filter((i) => i.id !== id));
 
-  const addVendor = (name) => {
-    setAssignedVendors([...assignedVendors, { id: Date.now(), name }]);
+  const addVendor = (v) => {
+    setAssignedVendors([...assignedVendors, { id: v.id, name: v.name }]);
     setVendorSearch('');
     setShowVendorSearch(false);
   };
@@ -156,12 +153,66 @@ export default function RFQManagement() {
     setAttachments((prev) => [...prev, ...files.map((f) => f.name)]);
   };
 
-  const handleSaveDraft = () => {
-    alert('RFQ saved as Draft!');
+  const handleSaveDraft = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload = {
+        title: form.title,
+        category: form.category,
+        deadline: form.deadline ? new Date(form.deadline).toISOString() : new Date().toISOString(),
+        description: form.description,
+        items: lineItems.map((item) => ({
+          item_name: item.name,
+          quantity: item.quantity,
+          unit: item.unit
+        })),
+        vendor_ids: assignedVendors.map((v) => v.id).filter(id => typeof id === 'string')
+      };
+      await createRFQ(payload);
+      alert('RFQ saved as Draft!');
+      setForm({ title: '', category: '', deadline: '', description: '' });
+      setLineItems([]);
+      setAssignedVendors([]);
+      setActiveStep(1);
+    } catch (err) {
+      console.error(err);
+      setSubmitError(err.response?.data?.message || err.message || 'Failed to save RFQ draft');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSendVendors = () => {
-    alert('RFQ sent to vendors!');
+  const handleSendVendors = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload = {
+        title: form.title,
+        category: form.category,
+        deadline: form.deadline ? new Date(form.deadline).toISOString() : new Date().toISOString(),
+        description: form.description,
+        items: lineItems.map((item) => ({
+          item_name: item.name,
+          quantity: item.quantity,
+          unit: item.unit
+        })),
+        vendor_ids: assignedVendors.map((v) => v.id).filter(id => typeof id === 'string')
+      };
+      const res = await createRFQ(payload);
+      const newRfqId = res.data.id;
+      await publishRFQ(newRfqId);
+      alert('RFQ published and sent to vendors!');
+      setForm({ title: '', category: '', deadline: '', description: '' });
+      setLineItems([]);
+      setAssignedVendors([]);
+      setActiveStep(1);
+    } catch (err) {
+      console.error(err);
+      setSubmitError(err.response?.data?.message || err.message || 'Failed to publish RFQ');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   /* ─────────────────────────────────────────────
@@ -179,6 +230,12 @@ export default function RFQManagement() {
   ───────────────────────────────────────────── */
   return (
     <div className="space-y-6 pb-12">
+
+      {submitError && (
+        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm p-4 rounded-xl flex items-center space-x-3">
+          <span>{submitError}</span>
+        </div>
+      )}
 
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -456,12 +513,12 @@ export default function RFQManagement() {
                     <div className="absolute z-30 mt-1 w-full bg-[#1e293b] border border-white/15 rounded-xl shadow-2xl overflow-hidden">
                       {filteredVendors.map((v) => (
                         <button
-                          key={v}
+                          key={v.id}
                           onClick={() => addVendor(v)}
                           className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-white/5 transition duration-100 text-left"
                         >
                           <FaBuilding size={12} className="text-emerald-400 shrink-0" />
-                          <span className="text-sm text-slate-200">{v}</span>
+                          <span className="text-sm text-slate-200">{v.name}</span>
                         </button>
                       ))}
                     </div>
@@ -815,18 +872,20 @@ export default function RFQManagement() {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/8">
         <button
           onClick={handleSaveDraft}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-[#1e293b]/60 hover:bg-[#1e293b] border border-white/15 hover:border-white/30 text-slate-300 hover:text-white font-semibold rounded-xl text-sm transition duration-150 active:scale-[0.98]"
+          disabled={submitting}
+          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-[#1e293b]/60 hover:bg-[#1e293b] border border-white/15 hover:border-white/30 text-slate-300 hover:text-white font-semibold rounded-xl text-sm transition duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FaSave size={14} />
-          <span>Save as Draft</span>
+          <span>{submitting ? 'Saving...' : 'Save as Draft'}</span>
         </button>
 
         <button
           onClick={handleSendVendors}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm shadow-lg hover:shadow-blue-500/25 transition duration-150 active:scale-[0.98]"
+          disabled={submitting}
+          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm shadow-lg hover:shadow-blue-500/25 transition duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FaPaperPlane size={14} />
-          <span>Save &amp; Send to Vendors</span>
+          <span>{submitting ? 'Publishing...' : 'Save & Send to Vendors'}</span>
         </button>
       </div>
 

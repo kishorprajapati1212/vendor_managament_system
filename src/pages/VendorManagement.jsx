@@ -17,7 +17,7 @@ import {
 } from 'react-icons/fa';
 
 export default function VendorManagement() {
-  const { vendors, setVendors, fetchVendors } = useVendor();
+  const { vendors, setVendors, fetchVendors, loading, error: fetchError } = useVendor();
   const { addLog } = useActivity();
 
   useEffect(() => {
@@ -41,54 +41,54 @@ export default function VendorManagement() {
     status: 'Active'
   });
 
-  // Sample data specified in wireframe
-  const seedVendors = [
-    { id: '1', name: 'ABC Supplies Pvt Ltd', email: 'contact@abc.com', category: 'Construction', gstNumber: '27AABCS1429B2D', contactNumber: '9876543210', status: 'Active' },
-    { id: '2', name: 'FastLog Transport', email: 'ship@fastlog.com', category: 'Logistics', gstNumber: '27AABCS1430B2D', contactNumber: '9876543211', status: 'Pending' },
-    { id: '3', name: 'Prime Tech Solutions', email: 'info@primetech.com', category: 'IT', gstNumber: '27AABCS1431B2D', contactNumber: '9876543212', status: 'Blocked' }
-  ];
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
-  // Merge context vendors avoiding duplicates by name
-  const allVendors = [...seedVendors];
-  vendors.forEach(v => {
-    if (!allVendors.some(sv => sv.name.toLowerCase() === v.name.toLowerCase())) {
-      allVendors.push({
-        id: v.id.toString(),
-        name: v.name,
-        email: v.email,
-        category: v.category || 'Construction',
-        gstNumber: v.gstNumber || '27AABCS1429B2D',
-        contactNumber: v.contactNumber || '9876543210',
-        status: v.status || 'Active'
-      });
-    }
-  });
+  // Use context vendors directly (live API data)
+  const allVendors = vendors;
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    const payload = {
-      name: addForm.name,
-      email: addForm.email || `${addForm.name.toLowerCase().replace(/\s+/g, '')}@company.com`,
-      category: addForm.category,
-      gstNumber: addForm.gstNumber,
-      contactNumber: addForm.contactNumber,
-      status: addForm.status
-    };
-    const res = await addVendor(payload);
-    setVendors([...vendors, res.data]);
-    addLog(`Created Vendor: ${addForm.name}`);
-    setIsAddModalOpen(false);
-    setAddForm({ name: '', email: '', category: 'Construction', gstNumber: '', contactNumber: '', status: 'Active' });
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const payload = {
+        name: addForm.name,
+        email: addForm.email || `${addForm.name.toLowerCase().replace(/\s+/g, '')}@company.com`,
+        category: addForm.category,
+        gstNumber: addForm.gstNumber,
+        contactNumber: addForm.contactNumber,
+        status: addForm.status
+      };
+      const res = await addVendor(payload);
+      setVendors([...vendors, res.data]);
+      addLog(`Created Vendor: ${addForm.name}`);
+      setIsAddModalOpen(false);
+      setAddForm({ name: '', email: '', category: 'Construction', gstNumber: '', contactNumber: '', status: 'Active' });
+    } catch (err) {
+      console.error(err);
+      setActionError(err.response?.data?.message || err.message || 'Failed to create vendor');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleEdit = async (e) => {
     e.preventDefault();
-    const res = await updateVendor(editingVendor.id, editingVendor);
-    // Update local context
-    setVendors(vendors.map(v => v.id.toString() === editingVendor.id ? res.data : v));
-    addLog(`Updated Vendor: ${editingVendor.name}`);
-    setIsEditModalOpen(false);
-    setEditingVendor(null);
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await updateVendor(editingVendor.id, editingVendor);
+      setVendors(vendors.map(v => v.id.toString() === editingVendor.id ? res.data : v));
+      addLog(`Updated Vendor: ${editingVendor.name}`);
+      setIsEditModalOpen(false);
+      setEditingVendor(null);
+    } catch (err) {
+      console.error(err);
+      setActionError(err.response?.data?.message || err.message || 'Failed to update vendor');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // Filter calculations
@@ -178,9 +178,21 @@ export default function VendorManagement() {
         ))}
       </div>
 
+      {/* Error and Loading indicators */}
+      {fetchError && (
+        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm p-4 rounded-xl flex items-center space-x-3">
+          <span>Failed to load vendors: {fetchError}</span>
+        </div>
+      )}
+
       {/* Vendors Table Card */}
       <div className="bg-[#1e293b]/50 backdrop-blur-sm rounded-xl border border-white/10 shadow-lg overflow-hidden">
-        {filteredVendors.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-16 text-slate-400 text-sm font-semibold flex flex-col items-center justify-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            <span>Loading vendors...</span>
+          </div>
+        ) : filteredVendors.length === 0 ? (
           <div className="text-center py-16 text-slate-500 text-sm font-semibold">
             No Vendors Found
           </div>
@@ -261,6 +273,11 @@ export default function VendorManagement() {
             <h3 className="text-xl font-bold text-white mb-4">Add New Vendor</h3>
             
             <form onSubmit={handleAdd} className="space-y-4">
+              {actionError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Vendor Name</label>
                 <input 
@@ -340,9 +357,10 @@ export default function VendorManagement() {
               <div className="pt-2">
                 <button 
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg active:scale-[0.98] transition duration-150 text-sm"
+                  disabled={actionLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg active:scale-[0.98] transition duration-150 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Vendor
+                  {actionLoading ? 'Saving...' : 'Save Vendor'}
                 </button>
               </div>
             </form>
@@ -366,6 +384,11 @@ export default function VendorManagement() {
             <h3 className="text-xl font-bold text-white mb-4">Edit Vendor Information</h3>
             
             <form onSubmit={handleEdit} className="space-y-4">
+              {actionError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Vendor Name</label>
                 <input 
@@ -442,9 +465,10 @@ export default function VendorManagement() {
               <div className="pt-2">
                 <button 
                   type="submit"
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 rounded-lg active:scale-[0.98] transition duration-150 text-sm"
+                  disabled={actionLoading}
+                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 rounded-lg active:scale-[0.98] transition duration-150 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Update Information
+                  {actionLoading ? 'Updating...' : 'Update Information'}
                 </button>
               </div>
             </form>

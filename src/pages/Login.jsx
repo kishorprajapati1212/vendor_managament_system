@@ -108,13 +108,12 @@ export default function Login() {
                 />
                 Remember me
               </label>
-              <a
-                href="#forgot-password"
-                onClick={(e) => e.preventDefault()}
+              <Link
+                to="/forgot-password"
                 className="text-blue-400 hover:text-blue-300 hover:underline transition duration-150"
               >
                 Forgot Password?
-              </a>
+              </Link>
             </div>
 
             <div>
