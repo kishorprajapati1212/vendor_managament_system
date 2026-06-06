@@ -4,9 +4,9 @@ TRUNCATE TABLE users CASCADE;
 
 -- Password encrypted via bcrypt corresponds to plain text: "Password@123"
 INSERT INTO users (email, password_hash, full_name, role, status) VALUES
-('admin@vendorbridge.com', '$2a$10$X87S8WwG/vR7L7j3KbeOfeB79D3n7gK4B6sYpEx5rGvB3xMDeGv1S', 'Super Admin', 'admin', 'active'),
-('officer@vendorbridge.com', '$2a$10$X87S8WwG/vR7L7j3KbeOfeB79D3n7gK4B6sYpEx5rGvB3xMDeGv1S', 'Riya Sharma', 'procurement_officer', 'active'),
-('manager@vendorbridge.com', '$2a$10$X87S8WwG/vR7L7j3KbeOfeB79D3n7gK4B6sYpEx5rGvB3xMDeGv1S', 'Anjali Sharma', 'manager', 'active'),
+('admin@vendorbridge.com', '$2a$10$OsGRubnOAi4qLHgVdrxhJukY50pfsLKp2OcBHfCJf.bpUmwKv6pBi', 'Super Admin', 'admin', 'active'),
+('officer@vendorbridge.com', '$2a$10$OsGRubnOAi4qLHgVdrxhJukY50pfsLKp2OcBHfCJf.bpUmwKv6pBi', 'Riya Sharma', 'procurement_officer', 'active'),
+('manager@vendorbridge.com', '$2a$10$OsGRubnOAi4qLHgVdrxhJukY50pfsLKp2OcBHfCJf.bpUmwKv6pBi', 'Anjali Sharma', 'manager', 'active'),
 ('kjhgfdsa1014@gmail.com', '$2a$10$tNO.29Odn6rt0r9beqf.we.eh/tf8MaKklvMX9tTV8kx7CQ4D0Msm', 'Acme Corporate Account', 'vendor', 'active');
 
 -- Seed a test vendor entity record

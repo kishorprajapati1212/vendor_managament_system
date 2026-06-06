@@ -1,9 +1,9 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
 const errorHandler = require('./middleware/errorHandler');
-const userRepository = require('./repositories/userRepository');
+const vendorRoutes = require('./routes/vendorRoutes');
+const rfqRoutes = require('./routes/rfqRoutes');
 
 dotenv.config();
 
@@ -19,7 +19,8 @@ app.use(express.json());
 
 // Routes
 app.use('/v1/auth', authRoutes);
-app.use('/api/users', userRoutes);
+app.use('/v1/vendors', vendorRoutes);
+app.use('/v1/rfqs', rfqRoutes);
 
 // Root route check
 app.get('/', (req, res) => {
